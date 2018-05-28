@@ -27,45 +27,7 @@ class My_AlexNet():
         self.IS_TRAINING = is_training
 
     def build(self):
-        # First conv layer
-        self.conv1 = self.conv_layer(self.X, 11, 11, 96, 4, 4, padding='VALID', name='conv1')
-        self.norm1 = self.lrn(self.conv1, 2, 1e-05, 0.75, name='norm1') 
-        self.pool1 = self.max_pool(self.norm1, 3, 3, 2, 2, padding='VALID', name='pool1')
-
-        # Second conv layer
-        self.conv2 = self.conv_layer(self.pool1, 5, 5, 256, 1, 1, padding='SAME', name='conv2')
-        self.norm2 = self.lrn(self.conv2, 2, 1e-05, 0.75, name='norm2') 
-        self.pool2 = self.max_pool(self.norm2, 3, 3, 2, 2, padding='VALID', name='pool2')
-
-        # Third conv layer
-        self.conv3 = self.conv_layer(self.pool2, 3, 3, 384, 1, 1, padding='SAME', name='conv3')
-
-        # Fourth conv layer
-        self.conv4 = self.conv_layer(self.conv3, 3, 3, 384, 1, 1, padding='SAME', name='conv4')
-
-        # Fifth conv layer
-        self.conv5 = self.conv_layer(self.conv4, 3, 3, 256, 1, 1, padding='SAME', name='conv5')
-        self.pool5 = self.max_pool(self.conv5, 3, 3, 2, 2, padding='VALID', name='pool5')
-       
-        # Sixth fc layer, flatten first
-        self.flatten = tf.reshape(self.pool5, [-1, 256*6*6])        
-        self.fc6 = self.fc_layer(self.flatten, 256*6*6, 4096, relu=True, name='fc6')
-        
-        if self.IS_TRAINING:
-            self.dropout6 = self.dropout(self.fc6, self.KEEP_RATE)
-        else:
-            self.dropout6 = self.fc6
-
-        # Seventh fc layer 
-        self.fc7 = self.fc_layer(self.dropout6, 4096, 4096, relu=True, name='fc7')
-            
-        if self.IS_TRAINING:
-            self.dropout7 = self.dropout(self.fc7, self.KEEP_RATE)
-        else:
-            self.dropout7 = sefl.fc7
-
-        # Eighth fc layer
-        self.fc8 = self.fc_layer(self.dropout7, 4096, self.NUM_CLASS, relu=FALSE, name='fc8')
+        pass
 
     def load_initial_weights(self):
         pass
@@ -109,7 +71,7 @@ class My_AlexNet():
 
         return relu
 
-    def fc_layer(self, x, num_input, num_output, name):
+    def fc_layer(self, x, num_input, num_output, name, relu=True):
 
         with tf.variable.scope(name):
 
@@ -122,7 +84,11 @@ class My_AlexNet():
             # Matix multiplication and add biases
             bias = tf.nn.xw_plus_b(x=x, weights=weights, biases=biases)
 
-        return bias
+            if relu == True:
+                relu = tf.nn.relu(features=bias)
+                return relu
+            else:
+                return bias
 
     def max_pool(self, x, 
                  filter_height, 
@@ -138,7 +104,7 @@ class My_AlexNet():
                               padding=padding,
                               name=name)
 
-    def lrn(self, input, depth_radius, alpha, beta, name, bias=1.0):
+    def lrn(self, input, depth_radius, bias, alpha, beta, name):
 
         return tf.nn.local_response_normalization(input=input,
                                                   depth_radius=depth_radius,
@@ -148,5 +114,4 @@ class My_AlexNet():
                                                   name=name) 
         
     def dropout(self, x, keep_rate):
-
         return tf.nn.dropout(x=x, keep_prob=keep_rate) 
