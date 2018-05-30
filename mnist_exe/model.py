@@ -84,12 +84,96 @@ def max_pool(
 def dropout(
     x,
     keep_rate,
-    train_mode):
+    is_train):
     
     return tf.cond(
-        pred=train_mode,
+        pred=is_train,
         true_fn=lambda: tf.dropout(
             x=x,
             keep_prob=keep_rate),
         false_fn=lambda: x)
 
+def model(
+    x,
+    labels,
+    train_mode):
+
+    # Conv layer #1
+    conv1 = conv_layer(
+        x=x,
+        input_channels=1, 
+        filter_height=5, 
+        filter_width=5, 
+        num_filters=32, 
+        stride_y=1, 
+        stride_x=1, 
+        padding='SAME', 
+        name='conv1')
+
+    # Pool layer #2
+    pool2 = max_pool(
+        x=conv1,
+        filter_height=2,
+        filter_width=2, 
+        stride_y=2, 
+        stride_x=2, 
+        padding='VALID', 
+        name='pool2')
+
+    # Conv layer #3
+    conv3 = conv_layer(
+        x=pool2,
+        input_channels=32, 
+        filter_height=5, 
+        filter_width=5, 
+        num_filters=64, 
+        stride_y=1, 
+        stride_x=1, 
+        padding='SAME', 
+        name='conv3')
+
+    # Pool layer #4
+    pool4 = max_pool(
+        x=conv3,
+        filter_height=2,
+        filter_width=2, 
+        stride_y=2, 
+        stride_x=2, 
+        padding='VALID', 
+        name='pool4')
+
+    # Fc layer #5
+    pool4_flat = tf.reshape(
+        tensor=pool4,
+        shape=[-1, 7 * 7 * 64])
+
+    fc5 = fc_layer(
+        x=pool4_flat,
+        num_input=7 * 7 * 64,
+        num_output=1024, 
+        name='fc5',
+        is_relu=True):
+
+    drop = dropout(
+        x=fc5,
+        keep_rate=0.4,
+        is_train=train_mode == 'TRAIN'):
+
+    # Logit layer #6
+    fc6 = fc_layer(
+        x=drop,
+        num_input=1024,
+        num_output=10, 
+        name='fc6',
+        is_relu=False):
+
+    predictions = {
+        'classes': tf.argmax(
+            input=fc6,
+            axis=1),
+        'probabilities': tf.nn.softmax(
+            logits=fc6, 
+            name='prob')
+        }
+
+         
