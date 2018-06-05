@@ -1,0 +1,8 @@
+/Users/ranranking/Work/tensorflow_excercise/test_image/2016_07_17_15_01_59.JPG 1
+/Users/ranranking/Work/tensorflow_excercise/test_image/2016_07_18_06_44_50.JPG 1
+/Users/ranranking/Work/tensorflow_excercise/test_image/2016_07_17_14_44_03.JPG 1
+/Users/ranranking/Work/tensorflow_excercise/test_image/2016_07_17_15_01_58.JPG 1
+/Users/ranranking/Work/tensorflow_excercise/test_image/2016_07_18_06_46_45.JPG 0
+/Users/ranranking/Work/tensorflow_excercise/test_image/2016_07_18_06_46_44.JPG 0
+/Users/ranranking/Work/tensorflow_excercise/test_image/2016_07_17_14_44_04.JPG 0
+/Users/ranranking/Work/tensorflow_excercise/test_image/2016_07_18_06_44_49.JPG 0
