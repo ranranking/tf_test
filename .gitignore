@@ -1,0 +1,9 @@
+.ipynb_checkpoints
+
+__*
+
+mnist_exe/MNIST_data/*
+
+mnist_exe/log/*
+
+
