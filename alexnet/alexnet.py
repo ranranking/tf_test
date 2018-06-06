@@ -1,152 +1,338 @@
-import numpy as npimport tensorflow as tf
+import tensorflow as tf
+import numpy as np
 
-class My_AlexNet():
+class My_AlexNet:
 
-    def __init__(self, x, 
-                 keep_rate, 
-                 num_class,
-                 reinit_layer,
-                 weight_path,
-                 is_training):
-
-        """
-        Inputs:
-        - x: Input images, tf.placeholder
-        - keep_rate: Probability to keep data in dropout, tf.placeholder
-        - num_class: Number of new class, int
-        - reinit_layer: Names of the layers to be reinitialized, list of strings
-        - weight_path: Path to the pretrained weights, string
-        - is_training: If retraining the model, boolean 
-        """
+    def __init__(self, x, keep_rate, num_classes, skip_layers=None, weights_path=None, retrain=True):
 
         self.X = x
         self.KEEP_RATE = keep_rate
-        self.NUM_CLASS = num_class
-        self.REINIT_LAYER = reinit_layer
-        self.WEIGHT_PATH = weight_path
-        self.IS_TRAINING = is_training
-
-    def build(self):
-        # First conv layer
-        self.conv1 = self.conv_layer(self.X, 11, 11, 96, 4, 4, padding='VALID', name='conv1')
-        self.norm1 = self.lrn(self.conv1, 2, 1e-05, 0.75, name='norm1') 
-        self.pool1 = self.max_pool(self.norm1, 3, 3, 2, 2, padding='VALID', name='pool1')
-
-        # Second conv layer
-        self.conv2 = self.conv_layer(self.pool1, 5, 5, 256, 1, 1, padding='SAME', name='conv2')
-        self.norm2 = self.lrn(self.conv2, 2, 1e-05, 0.75, name='norm2') 
-        self.pool2 = self.max_pool(self.norm2, 3, 3, 2, 2, padding='VALID', name='pool2')
-
-        # Third conv layer
-        self.conv3 = self.conv_layer(self.pool2, 3, 3, 384, 1, 1, padding='SAME', name='conv3')
-
-        # Fourth conv layer
-        self.conv4 = self.conv_layer(self.conv3, 3, 3, 384, 1, 1, padding='SAME', name='conv4')
-
-        # Fifth conv layer
-        self.conv5 = self.conv_layer(self.conv4, 3, 3, 256, 1, 1, padding='SAME', name='conv5')
-        self.pool5 = self.max_pool(self.conv5, 3, 3, 2, 2, padding='VALID', name='pool5')
-       
-        # Sixth fc layer, flatten first
-        self.flatten = tf.reshape(self.pool5, [-1, 256*6*6])        
-        self.fc6 = self.fc_layer(self.flatten, 256*6*6, 4096, relu=True, name='fc6')
+        self.NUM_CLASSES = num_classes
+        self.SKIP_LAYERS = skip_layers
+        self.WEIGHTS_PATH = weights_path
+        self.RETRAIN = retrain
         
-        if self.IS_TRAINING:
-            self.dropout6 = self.dropout(self.fc6, self.KEEP_RATE)
-        else:
-            self.dropout6 = self.fc6
-
-        # Seventh fc layer 
-        self.fc7 = self.fc_layer(self.dropout6, 4096, 4096, relu=True, name='fc7')
+    def conv_layer(
+        self, 
+        x,
+        input_channels, 
+        filter_height, 
+        filter_width, 
+        num_filters, 
+        stride_y, 
+        stride_x, 
+        padding, 
+        name):
+    
+        with tf.variable_scope(name):
+    
+            weights = tf.get_variable(
+                name='weights', 
+                shape=[filter_height, filter_width, input_channels, num_filters])
+    
+            biases = tf.get_variable(
+                name='biases', 
+                shape=[num_filters])
             
-        if self.IS_TRAINING:
-            self.dropout7 = self.dropout(self.fc7, self.KEEP_RATE)
-        else:
-            self.dropout7 = sefl.fc7
-
-        # Eighth fc layer
-        self.fc8 = self.fc_layer(self.dropout7, 4096, self.NUM_CLASS, relu=FALSE, name='fc8')
-
-    def load_initial_weights(self):
-        pass
-   
-    def conv_layer(self, x,
-                   filter_height,
-                   filter_width,
-                   num_filters, 
-                   stride_y,
-                   stride_x,
-                   name,
-                   padding='SAME'):
-
-        # Get input channels
-        input_channels = int(x.get_shape()[-1])
-
-        # Since the weights do not have grouping, grouping function is not
-        # included.
-        with tf.variable.scope(name):
-
-            # Set up tf variables for weights and biases 
-            weights = tf.get_variable(name='weights',
-                                      shape=[filter_height,
-                                             filter_width, 
-                                             input_channels, 
-                                             num_filters])
-                
-            biases = tf.get_variable(name='biases', shape=[num_filters])
-
-            # Convolution
-            conv = tf.nn.conv2d(input=x,
-                                filter=weights, 
-                                stride=[1, stride_y, stride_x, 1], 
-                                padding=padding)
-
-            # Add biases
-            bias = tf.nn.bias_add(value=conv, bias=biases)
-
-            # Relu
-            relu = tf.nn.relu(features=bias)
-
-        return relu
-
-    def fc_layer(self, x, num_input, num_output, name):
-
-        with tf.variable.scope(name):
-
-            # Set up tf variables for weights and biases 
-            weights = tf.get_variable(name='weights',
-                                      shape=[num_input, num_output])
-                
-            biases = tf.get_variable(name='biases', shape=[num_output])
-
-            # Matix multiplication and add biases
-            bias = tf.nn.xw_plus_b(x=x, weights=weights, biases=biases)
-
-        return bias
-
-    def max_pool(self, x, 
-                 filter_height, 
-                 filter_width, 
-                 stride_y,
-                 stride_x, 
-                 name, 
-                 padding='SAME'):
-
-        return tf.nn.max_pool(value=x,
-                              ksize=[1, filter_height, filter_width, 1],
-                              stride=[1, stride_y, stride_x, 1],
-                              padding=padding,
-                              name=name)
-
-    def lrn(self, input, depth_radius, alpha, beta, name, bias=1.0):
-
-        return tf.nn.local_response_normalization(input=input,
-                                                  depth_radius=depth_radius,
-                                                  bias=bias,
-                                                  alpha=alpha,
-                                                  beta=beta,
-                                                  name=name) 
+            conv = tf.nn.conv2d(
+                input=x,
+                filter=weights,
+                strides=[1, stride_y, stride_x, 1], 
+                padding=padding)
+    
+            bias = tf.nn.bias_add(
+                value=conv, 
+                bias=biases)
+    
+            relu = tf.nn.relu(
+                features=bias)        
+    
+            # Summaries
+            tf.summary.histogram("weights", weights)
+            tf.summary.histogram("biases", biases)
+            tf.summary.histogram("activations", relu)
+    
+            return relu
+    
+    def fc_layer(
+        self,
+        x,
+        num_input,
+        num_output, 
+        name,
+        is_relu):
         
-    def dropout(self, x, keep_rate):
+        with tf.variable_scope(name):
+    
+            weights = tf.get_variable(
+                name='weights', 
+                shape=[num_input, num_output])
+    
+            biases = tf.get_variable(
+                name='biases', 
+                shape=[num_output])
+    
+            bias = tf.nn.xw_plus_b(
+                x=x,
+                weights=weights, 
+                biases=biases)
+    
+            # Summaries
+            tf.summary.histogram("weights", weights)
+            tf.summary.histogram("biases", biases)
+    
+            if is_relu:
+    
+                relu = tf.nn.relu(
+                    features=bias)
+    
+                tf.summary.histogram("relu", relu)
+    
+                return relu
+            else:
+                return bias
+    
+    def max_pool(
+        self,
+        x,
+        filter_height,
+        filter_width, 
+        stride_y, 
+        stride_x, 
+        padding, 
+        name):
+    
+        return tf.nn.max_pool(
+            value=x, 
+            ksize=[1, filter_height, filter_width, 1], 
+            strides=[1, stride_y, stride_x, 1], 
+            padding=padding, 
+            name=name)
+    
+    def dropout(
+        self,
+        x,
+        keep_rate,
+        name):
+        
+        return tf.nn.dropout(
+            x=x,
+            keep_prob=keep_rate,
+            name=name)
+        
+    def lrn (
+        self,
+        x,
+        radius,
+        alpha,
+        beta,
+        bias,
+        name):
+    
+        return tf.nn.local_response_normalization(
+            input=x,
+            depth_radius=radius,
+            alpha=alpha,
+            beta=beta,
+            bias=bias,
+            name=name)
+    
+    def build(
+        self):
 
-        return tf.nn.dropout(x=x, keep_prob=keep_rate) 
+        # Layer #1
+        # Conv 1
+        self.conv1 = self.conv_layer(
+            x=self.X,
+            input_channels=3, 
+            filter_height=11,
+            filter_width=11, 
+            num_filters=96, 
+            stride_y=4, 
+            stride_x=4, 
+            padding='VALID', 
+            name='conv1')
+    
+        # Norm 1
+        self.norm1 = self.lrn (
+            x=self.conv1,
+            radius=2,
+            alpha=1e-05,
+            beta=0.75,
+            bias=1.0,
+            name='norm1')
+    
+        # Pool1
+        self.pool1 = self.max_pool(
+            x=self.norm1,
+            filter_height=3,
+            filter_width=3, 
+            stride_y=2, 
+            stride_x=2, 
+            padding='VALID', 
+            name='pool1')
+    
+        # Layer #2
+        # Conv 2
+        self.conv2 = self.conv_layer(
+            x=self.pool1,
+            input_channels=96, 
+            filter_height=5, 
+            filter_width=5, 
+            num_filters=256, 
+            stride_y=1, 
+            stride_x=1, 
+            padding='SAME', 
+            name='conv2')
+    
+        # Norm 2
+        self.norm2 = self.lrn (
+            x=self.conv2,
+            radius=2,
+            alpha=1e-05,
+            beta=0.75,
+            bias=1.0,
+            name='norm2')
+    
+        # Pool 2
+        self.pool2 = self.max_pool(
+            x=self.norm2,
+            filter_height=3,
+            filter_width=3, 
+            stride_y=2, 
+            stride_x=2, 
+            padding='VALID', 
+            name='pool2')
+    
+        # Layer 3
+        # Conv 3
+        self.conv3 = self.conv_layer(
+            x=self.pool2,
+            input_channels=256, 
+            filter_height=3, 
+            filter_width=3, 
+            num_filters=384, 
+            stride_y=1, 
+            stride_x=1, 
+            padding='SAME', 
+            name='conv3')
+    
+        # Layer 4
+        # Conv 4
+        self.conv4 = self.conv_layer(
+            x=self.conv3,
+            input_channels=384, 
+            filter_height=3, 
+            filter_width=3, 
+            num_filters=384, 
+            stride_y=1, 
+            stride_x=1, 
+            padding='SAME', 
+            name='conv4')
+    
+        # Layer 5
+        # Conv 5
+        self.conv5 = self.conv_layer(
+            x=self.conv4,
+            input_channels=384, 
+            filter_height=3, 
+            filter_width=3, 
+            num_filters=256, 
+            stride_y=1, 
+            stride_x=1, 
+            padding='SAME', 
+            name='conv5')
+    
+        # Pool 5
+        self.pool5 = self.max_pool(
+            x=self.conv5,
+            filter_height=3,
+            filter_width=3, 
+            stride_y=2, 
+            stride_x=2, 
+            padding='VALID', 
+            name='pool5')
+        
+        # Layer 6
+        # Flatten
+        self.flat6 = tf.reshape(
+            tensor=self.pool5,
+            shape=[-1, 6 * 6 * 256],
+            name='flatten6')
+    
+        # Fc 6 
+        self.fc6 = self.fc_layer(
+            x=self.flat6,
+            num_input=6 * 6 * 256,
+            num_output=4096, 
+            name='fc6',
+            is_relu=True)
+    
+        # Drop 6
+        self.drop6 = self.dropout(
+            x=self.fc6,
+            keep_rate=self.KEEP_RATE,
+            name='drop6')
+    
+        # Layer 7
+        # Fc 7 
+        self.fc7 = self.fc_layer(
+            x=self.drop6,
+            num_input=4096,
+            num_output=4096, 
+            name='fc7',
+            is_relu=True)
+    
+        # Drop 7
+        self.drop7 = self.dropout(
+            x=self.fc7,
+            keep_rate=self.KEEP_RATE,
+            name='drop7')
+    
+        # Logit layer 8
+        self.logits = self.fc_layer(
+            x=self.drop7,
+            num_input=4096,
+            num_output=self.NUM_CLASSES, 
+            name='fc8',
+            is_relu=False)
+
+    def load_weights(
+        self,
+        encoding,
+        session):
+
+        weights_dict = np.load(self.WEIGHTS_PATH, encoding=encoding).item()
+
+        for op_name in weights_dict:
+
+            if op_name not in self.SKIP_LAYERS:
+
+                with tf.variable_scope(op_name, reuse=True):
+
+                    for weights in weights_dict[op_name]:
+
+                        if len(weights.shape) == 1:
+
+                            if self.RETRAIN:
+                                var = tf.get_variable('biases')
+                            else:
+                                var = tf.get_variable('biases', trainable=False)
+
+                            session.run(var.assign(weights))
+
+                        else:
+
+                            if self.RETRAIN:
+                                var = tf.get_variable('weights')
+                            else:
+                                var = tf.get_variable('weights', trainable=False)
+
+                            session.run(var.assign(weights))
+        
+
+
+    
+    
+
+         
