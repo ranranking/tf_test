@@ -21,25 +21,45 @@ class My_AlexNet:
         num_filters, 
         stride_y, 
         stride_x, 
-        padding, 
+        padding,
+        groups,
         name):
     
         with tf.variable_scope(name):
     
             weights = tf.get_variable(
                 name='weights', 
-                shape=[filter_height, filter_width, input_channels, num_filters])
+                shape=[filter_height, filter_width, input_channels/groups, num_filters])
     
             biases = tf.get_variable(
                 name='biases', 
                 shape=[num_filters])
             
-            conv = tf.nn.conv2d(
-                input=x,
-                filter=weights,
-                strides=[1, stride_y, stride_x, 1], 
-                padding=padding)
-    
+            if groups == 1:
+                conv = tf.nn.conv2d(
+                    input=x,
+                    filter=weights,
+                    strides=[1, stride_y, stride_x, 1], 
+                    padding=padding)
+            else:
+                input_groups = tf.split(
+                    value=x,
+                    num_or_size_splits=groups,
+                    axis=3)
+                weights_groups = tf.split(
+                    value=weights,
+                    num_or_size_splits=groups,
+                    axis=3)
+                output_groups = [tf.nn.conv2d(
+                    input=i,
+                    filter=k,
+                    strides=[1, stride_y, stride_x, 1], 
+                    padding=padding) for i, k in zip(input_groups, weights_groups)]
+
+                conv = tf.concat(
+                    values=output_groups,
+                    axis=3)
+
             bias = tf.nn.bias_add(
                 value=conv, 
                 bias=biases)
@@ -151,6 +171,7 @@ class My_AlexNet:
             stride_y=4, 
             stride_x=4, 
             padding='VALID', 
+            groups=1,
             name='conv1')
     
         # Norm 1
@@ -183,6 +204,7 @@ class My_AlexNet:
             stride_y=1, 
             stride_x=1, 
             padding='SAME', 
+            groups=2,
             name='conv2')
     
         # Norm 2
@@ -215,6 +237,7 @@ class My_AlexNet:
             stride_y=1, 
             stride_x=1, 
             padding='SAME', 
+            groups=1,
             name='conv3')
     
         # Layer 4
@@ -228,6 +251,7 @@ class My_AlexNet:
             stride_y=1, 
             stride_x=1, 
             padding='SAME', 
+            groups=2,
             name='conv4')
     
         # Layer 5
@@ -241,6 +265,7 @@ class My_AlexNet:
             stride_y=1, 
             stride_x=1, 
             padding='SAME', 
+            groups=2,
             name='conv5')
     
         # Pool 5
