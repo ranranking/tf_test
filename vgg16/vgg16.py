@@ -8,6 +8,7 @@ class MY_VGG16:
             x, 
             keep_rate,
             num_classes,
+            mean_image,
             skip_layers=[],
             weights_path=None,
             retrain=True):
@@ -15,6 +16,7 @@ class MY_VGG16:
         self.X = x
         self.KEEP_RATE = keep_rate
         self.NUM_CLASSES = num_classes
+        self.MEAN_IMAGE = mean_image
         self.SKIP_LAYERS = skip_layers
         self.WEIGHTS_PATH = weights_path
         self.RETRAIN = retrain
@@ -127,10 +129,18 @@ class MY_VGG16:
 
     def build(
             self):
+        
+        # Convert to BGR <-- Because the weights were trained from opencv images
+        self.bgr = tf.reverse(
+            tensor=self.X, 
+            axis=[-1])
+                
+        # Subtract from mean
+        self.bgr_sub = self.bgr - self.MEAN_IMAGE
 
         # First stack
         self.conv1_1 = self.conv_layer(
-            x=self.X,
+            x=self.bgr_sub,
             input_channels=3, 
             filter_height=3,
             filter_width=3, 

@@ -3,11 +3,12 @@ import numpy as np
 
 class My_AlexNet:
 
-    def __init__(self, x, keep_rate, num_classes, skip_layers=None, weights_path=None, retrain=True):
+    def __init__(self, x, keep_rate, num_classes, mean_image, skip_layers=None, weights_path=None, retrain=True):
 
         self.X = x
         self.KEEP_RATE = keep_rate
         self.NUM_CLASSES = num_classes
+        self.MEAN_IMAGE = mean_image
         self.SKIP_LAYERS = skip_layers
         self.WEIGHTS_PATH = weights_path
         self.RETRAIN = retrain
@@ -160,10 +161,18 @@ class My_AlexNet:
     def build(
         self):
 
+        # Convert to BGR <-- Because the weights were trained from opencv images
+        self.bgr = tf.reverse(
+            tensor=self.X, 
+            axis=[-1])
+                
+        # Subtract from mean
+        self.bgr_sub = self.bgr - self.MEAN_IMAGE
+
         # Layer #1
         # Conv 1
         self.conv1 = self.conv_layer(
-            x=self.X,
+            x=self.bgr_sub,
             input_channels=3, 
             filter_height=11,
             filter_width=11, 
