@@ -8,18 +8,22 @@ class MY_VGG16:
             x, 
             keep_rate,
             num_classes,
+            batch_size,
             mean_image,
             skip_layers=[],
             weights_path=None,
-            retrain=True):
+            retrain=True,
+            random_crop=True):
 
         self.X = x
         self.KEEP_RATE = keep_rate
         self.NUM_CLASSES = num_classes
         self.MEAN_IMAGE = mean_image
+        self.BATCH_SIZE = batch_size
         self.SKIP_LAYERS = skip_layers
         self.WEIGHTS_PATH = weights_path
         self.RETRAIN = retrain
+        self.RANDOM_CROP = random_crop
 
     def conv_layer(
             self, 
@@ -130,17 +134,45 @@ class MY_VGG16:
     def build(
             self):
         
-        # Convert to BGR <-- Because the weights were trained from opencv images
-        self.bgr = tf.reverse(
-            tensor=self.X, 
-            axis=[-1])
-                
-        # Subtract from mean
-        self.bgr_sub = self.bgr - self.MEAN_IMAGE
+        with tf.variable_scope('input_preparations'):
+            
+            # Crop and resize
+            self.crop_resize = tf.image.crop_and_resize(
+                image=self.X,
+                boxes=[[0, 0, 0.9, 1]] * self.BATCH_SIZE,
+                box_ind=range(self.BATCH_SIZE),
+                crop_size=[int(self.X.get_shape()[1]), 
+                    int(self.X.get_shape()[2])],
+                name='crop_resize')
+            
+            # Convert to BGR <-- Because the weights were trained from opencv images
+            self.bgr = tf.reverse(
+                tensor=self.crop_resize, 
+                axis=[-1],
+                name='bgr')
 
+            # Subtract from mean
+            self.bgr_sub = tf.subtract(
+                x=self.bgr,
+                y=self.MEAN_IMAGE,
+                name='mean_subtraction')
+            
+            # Crop
+            self.final_input = tf.cond(
+                pred=self.RANDOM_CROP,
+                true_fn=lambda: tf.random_crop(
+                    value=self.bgr_sub,
+                    size=[self.BATCH_SIZE, 224, 224, 3],
+                    name='random_crop'),
+                false_fn=lambda: tf.image.resize_image_with_crop_or_pad(
+                    image=self.bgr_sub,
+                    target_height=224,
+                    target_width=224),
+                name='crop_condition')
+             
         # First stack
         self.conv1_1 = self.conv_layer(
-            x=self.bgr_sub,
+            x=self.final_input,
             input_channels=3, 
             filter_height=3,
             filter_width=3, 

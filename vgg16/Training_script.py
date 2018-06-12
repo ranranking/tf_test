@@ -13,8 +13,12 @@ def _image_parser (path, label):
     image_file = tf.read_file(path)
     image_decoded = tf.image.decode_jpeg(image_file, channels=3)
     image_resized = tf.image.resize_images(image_decoded, INPUT_IMAGE_SIZE)
-    
+
     return image_resized, one_hot_label
+
+# ----------------------------
+# ----------------------------
+# ----------------------------
 
 # Misc
 LOG_DIR = './log/'
@@ -28,22 +32,32 @@ LEARNING_RATE = 0.005
 MOMENTUM = 0.9
 NUM_EPOCHS = 1
 NUM_STEPS = 5000
-BATCH_SIZE = 128
+BATCH_SIZE = 64
 DISPLAY_STEP = 1
-INPUT_IMAGE_SIZE = [224, 224]
+INPUT_IMAGE_SIZE = [256, 256]
 NUM_CLASSES = 20
 KEEP_RATE = 0.75
 
+# ----------------------------
+# ----------------------------
+# ----------------------------
+
 # Data preparation
-train = pd.read_csv('../train20.txt', delimiter=' ', header=None).sample(frac=1)  
+train = pd.read_csv('../train20.txt', delimiter=' ', header=None).sample(frac=1)
 val = train.sample(frac=0.1, random_state=10)
 train = train.drop(val.index)
 test = pd.read_csv('../test20.txt', delimiter=' ', header=None).sample(frac=1)
 
+# ----------------------------
+# ----------------------------
+# ----------------------------
+
+# Model Graph
 model_graph = tf.Graph()
 with model_graph.as_default():
     
     keep_prob = tf.placeholder(tf.float32)
+    rand_crop = tf.placeholder(tf.bool)
     
     # Dataset
     trn_ds = tf.data.Dataset.from_tensor_slices(
@@ -64,33 +78,41 @@ with model_graph.as_default():
     testing_iterator = test_ds.make_one_shot_iterator()
     
     # Image Summary
-    tf.summary.image('input', x, 10)
+    # tf.summary.image('input', x, 5)
     
     # Build Model
-    vgg = MY_VGG16(x=x, keep_rate=KEEP_RATE, 
-                   num_classes=NUM_CLASSES, mean_image=MEAN_IMAGE,
-                   skip_layers=['fc8'],
-                   weights_path='../vgg16.npy', retrain=True)
+    vgg = MY_VGG16(x=x, keep_rate=KEEP_RATE, num_classes=NUM_CLASSES, 
+                   batch_size=BATCH_SIZE, mean_image=MEAN_IMAGE,
+                   skip_layers=['fc8'],weights_path='../vgg16.npy',
+                   retrain=True, random_crop=rand_crop)
     vgg.build()
+    
+    # Image Summary
+    tf.summary.image('input', vgg.final_input, 5)
     
     # Logits and Predictions
     logits = vgg.logits
-    prediction = {'classes': tf.argmax(logits, axis=1), 
-                  'prob': tf.nn.softmax(logits, name='prob')}
     
+    with tf.variable_scope('predictions'):
+        pred_classes  = tf.argmax(logits, axis=1, name='prediction_label')
+        prob = tf.nn.softmax(logits, name='prob')
+        tf.summary.histogram('prediction_label', pred_classes)
+        tf.summary.histogram('prob', prob)
+
     # Loss and optimizer
     with tf.variable_scope('cross_entropy_loss'):
-        loss_op = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(logits=logits, labels=y))
+        loss_op = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(logits=logits, labels=y), name='mean_loss')
         tf.summary.scalar('cross_entropy_loss', loss_op)
     
     with tf.variable_scope('train'):
-        optimizer = tf.train.MomentumOptimizer(learning_rate=LEARNING_RATE, momentum=MOMENTUM)
-        train_op = optimizer.minimize(loss_op, global_step=tf.train.get_global_step())
+        optimizer = tf.train.MomentumOptimizer(learning_rate=LEARNING_RATE, momentum=MOMENTUM, name='momentum_optimizer')
+        train_op = optimizer.minimize(loss_op, global_step=tf.train.get_global_step(), name='loss_minimization')
     
     # Evaluation
     with tf.variable_scope('accuracy'):
-        correct_pred = tf.equal(prediction['classes'], tf.argmax(y, 1))
-        accuracy_op = tf.reduce_mean(tf.cast(correct_pred, tf.float32))
+        true_labels = tf.argmax(y, 1, name='true_label')
+        correct_pred = tf.equal(pred_classes, true_labels, name='true_pred_equal')
+        accuracy_op = tf.reduce_mean(tf.cast(correct_pred, tf.float32), name='mean_accuracy')
         tf.summary.scalar('accuracy', accuracy_op)
     
     # Global Initializer
@@ -101,22 +123,22 @@ with model_graph.as_default():
     
     # Global saver
     saver = tf.train.Saver()
-    
+
+# ----------------------------
+# ----------------------------
+# ----------------------------
+
+# Running Session
+
 with tf.Session(graph=model_graph) as sess:
     
     # Debugger
-    #sess = tf_debug.TensorBoardDebugWrapperSession(sess, "MZQ-MBP.local:7000")
-    
-    # Writer
-    writer = tf.summary.FileWriter(os.path.join(LOG_DIR, 'model_%s'%MODEL_ID), graph=model_graph)
-    
-    # Embedding projector
-    # tf.contrib.tensorboard.plugins.projector.visualize_embeddings(writer, config)
+    # sess = tf_debug.TensorBoardDebugWrapperSession(sess, "marr:7000")
     
     # Run Global Initializer
-#     print('Start initializing.')
-#     sess.run(global_init)
-#     print('Done')
+    print('Start initializing.')
+    sess.run(global_init)
+    print('Done')
     
     # Iterator Handles
     training_handle = sess.run(training_iterator.string_handle())
@@ -124,14 +146,17 @@ with tf.Session(graph=model_graph) as sess:
     testing_handle = sess.run(testing_iterator.string_handle())
     
     # Load ImageNet Weights
-    # print('Starting loading pretrained weights.')
-    # vgg.load_weights(session=sess, encoding='latin1')
-    # print('Loaded.')
+    print('Starting loading pretrained weights.')
+    vgg.load_weights(session=sess, encoding='latin1')
+    print('Loaded.')
     
     # Restore pretrained model
-    print('Loading imagenet model')
-    saver.restore(sess, IMGNET_PRE_MODEL)
-    print('Model restored.')
+#     print('Loading imagenet model')
+#     saver.restore(sess, IMGNET_PRE_MODEL)
+#     print('Model restored.')
+
+    # Writer
+    writer = tf.summary.FileWriter(os.path.join(LOG_DIR, 'model_%s'%MODEL_ID), graph=model_graph)
     
     step = 0
     
@@ -140,17 +165,15 @@ with tf.Session(graph=model_graph) as sess:
     for epoch in range(NUM_EPOCHS):
         
         sess.run(training_iterator.initializer)
-        
         while True:
-            
             # Training
             try:
-                sess.run(train_op, feed_dict={keep_prob: KEEP_RATE, handle: training_handle})
+                sess.run(train_op, feed_dict={keep_prob: KEEP_RATE, rand_crop: True, handle: training_handle})
 
                 if step % DISPLAY_STEP == 0:
 
                     loss_val, acc, s = sess.run([loss_op, accuracy_op, summary],
-                                                feed_dict={keep_prob: 1.0, handle: training_handle})
+                                                feed_dict={keep_prob: 1.0, rand_crop: False, handle: training_handle})
 
                     writer.add_summary(s, step)
 
@@ -174,7 +197,7 @@ with tf.Session(graph=model_graph) as sess:
 
                 while True:
                     try:
-                        loss_val, acc = sess.run([loss_op, accuracy_op], feed_dict={keep_prob: 1.0, handle: validation_handle})
+                        loss_val, acc = sess.run([loss_op, accuracy_op], feed_dict={keep_prob: 1.0, rand_crop: False, handle: validation_handle})
                         val_acc += acc
                         val_loss += loss_val
                         validation_iter += 1
@@ -186,12 +209,11 @@ with tf.Session(graph=model_graph) as sess:
                       "{:.4f}".format(val_loss/validation_iter) + ", Training Accuracy= " + \
                       "{:.3f}".format(val_acc/validation_iter))
             
-            # Save the model every 1000 steps
-            if step % 1000 == 0 and step != 0:
-                saver.save(sess, os.path.join(LOG_DIR, "model.ckpt"), step)
+        # Save the model every epoch
+        saver.save(sess, os.path.join(LOG_DIR, "epoch.model.ckpt"), epoch)
 
     # Save the final model
-    saver.save(sess, os.path.join(LOG_DIR, "model.ckpt"), step)
+    saver.save(sess, os.path.join(LOG_DIR, "final.model.ckpt"), step)
 
     # Testing
     test_acc = 0
@@ -200,7 +222,7 @@ with tf.Session(graph=model_graph) as sess:
 
     while True:        
         try:
-            loss_val, acc = sess.run([loss_op, accuracy_op], feed_dict={keep_prob: 1.0, handle: testing_handle})
+            loss_val, acc = sess.run([loss_op, accuracy_op], feed_dict={keep_prob: 1.0, rand_crop: False, handle: testing_handle})
             test_acc += acc
             test_loss += loss_val
             testing_iter += 1
