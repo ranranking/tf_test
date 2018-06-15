@@ -9,7 +9,6 @@ class MY_VGG16:
             keep_rate,
             num_classes,
             batch_size,
-            mean_image,
             skip_layers=[],
             weights_path=None,
             retrain=True,
@@ -18,12 +17,14 @@ class MY_VGG16:
         self.X = x
         self.KEEP_RATE = keep_rate
         self.NUM_CLASSES = num_classes
-        self.MEAN_IMAGE = mean_image
+        
         self.BATCH_SIZE = batch_size
         self.SKIP_LAYERS = skip_layers
         self.WEIGHTS_PATH = weights_path
         self.RETRAIN = retrain
         self.RANDOM_CROP = random_crop
+        
+        self.MEAN_IMAGE = np.array([104., 117., 124.])
 
     def conv_layer(
             self, 
